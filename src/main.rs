@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::{
-    collections::BTreeMap,
     fs::File,
     io::{self, BufRead, BufReader},
 };
@@ -13,7 +13,7 @@ pub fn main() -> Result<(), io::Error> {
     let mut buffer = String::new();
 
     // (min, total, max, count)
-    let mut accs: BTreeMap<String, (i16, i64, i16, u32)> = BTreeMap::new();
+    let mut accs: HashMap<String, (i16, i64, i16, u32)> = HashMap::new();
 
     for _ in 0..1_000_000_000 {
         buffer.clear();
@@ -38,7 +38,9 @@ pub fn main() -> Result<(), io::Error> {
 
     let mut out = String::with_capacity(accs.len() * 40);
     out.push('{');
-    for (i, (name, (min, total, max, count))) in accs.iter().enumerate() {
+    let mut entries: Vec<_> = accs.iter().collect();
+    entries.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    for (i, (name, (min, total, max, count))) in entries.iter().enumerate() {
         if i > 0 {
             out.push_str(", ");
         }
