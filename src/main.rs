@@ -1,17 +1,22 @@
 use std::{
     fs::File,
-    io::{self, Read},
+    io::{self, BufRead, BufReader},
 };
 
 const FILE_NAME: &'static str = "measurements.txt";
 
 pub fn main() -> Result<(), io::Error> {
-    let mut file = File::open(FILE_NAME)?;
-    let mut buffer = [0; 10];
+    let file = File::open(FILE_NAME)?;
+    let mut buf_reader = BufReader::new(file);
+    let mut buffer = String::new();
 
-    let n = file.read(&mut buffer)?;
+    for _ in 0..1_000_000_000 {
+        buf_reader.read_line(&mut buffer)?;
 
-    println!("buffer read: {:?}", &buffer[..n]);
+        print!("{}", &buffer);
+        buffer.clear();
+    }
 
     Ok(())
 }
+
