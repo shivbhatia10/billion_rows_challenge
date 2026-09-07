@@ -18,3 +18,11 @@ Lipki;43.2
 The task is to read each line and for each weather station calculate the lowest, mean, and highest values.
 
 
+2026-09-07 17:37
+
+First working solution, very naive:
+
+________________________________________________________
+Executed in  224.66 secs    fish           external
+   usr time  219.35 secs    0.37 millis  219.35 secs
+   sys time    4.74 secs    1.90 millis    4.74 secs
