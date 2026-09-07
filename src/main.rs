@@ -1,11 +1,43 @@
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::{
     fs::File,
     io::{self, BufRead, BufReader},
 };
 
 const FILE_NAME: &'static str = "measurements.txt";
+const K: u64 = 0x517c_c1b7_2722_0a95;
+
+#[derive(Default)]
+struct CustomHasher(u64);
+
+impl Hasher for CustomHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        let mut h = self.0;
+        let mut c = bytes;
+        while c.len() >= 8 {
+            let v = u64::from_le_bytes(c[..8].try_into().unwrap());
+            h = (h.rotate_left(5) ^ v).wrapping_mul(K);
+            c = &c[8..];
+        }
+        for &b in c {
+            h = (h.rotate_left(5) ^ b as u64).wrapping_mul(K);
+        }
+        self.0 = h;
+    }
+    fn write_u8(&mut self, i: u8) {
+        self.0 = (self.0.rotate_left(5) ^ i as u64).wrapping_mul(K);
+    }
+    fn write_usize(&mut self, i: usize) {
+        self.0 = (self.0.rotate_left(5) ^ i as u64).wrapping_mul(K);
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+type CustomHashMap<K, V> = HashMap<K, V, BuildHasherDefault<CustomHasher>>;
 
 pub fn main() -> Result<(), io::Error> {
     let file = File::open(FILE_NAME)?;
@@ -13,7 +45,7 @@ pub fn main() -> Result<(), io::Error> {
     let mut line: Vec<u8> = Vec::new();
 
     // (min, total, max, count)
-    let mut accs: HashMap<Vec<u8>, (i16, i64, i16, u32)> = HashMap::new();
+    let mut accs: CustomHashMap<Vec<u8>, (i16, i64, i16, u32)> = CustomHashMap::default();
 
     for _ in 0..1_000_000_000 {
         line.clear();
@@ -83,4 +115,3 @@ pub fn main() -> Result<(), io::Error> {
 
     Ok(())
 }
-

@@ -97,4 +97,6 @@ Executed in   40.42 secs    fish           external
    sys time    2.36 secs    1.44 millis    2.36 secs
 
 
+With the cargo flag stuff it got down to 37.49 secs, with a custom hash function it's at 36.55 secs which could be noise.
+
 
