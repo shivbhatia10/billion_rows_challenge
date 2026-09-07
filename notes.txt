@@ -1,4 +1,3 @@
-2026-09-07 15:45
 
 Starting now, the measurements.txt file is generated. Looks to be about 15GB which is roughly correct.
 
@@ -18,11 +17,66 @@ Lipki;43.2
 The task is to read each line and for each weather station calculate the lowest, mean, and highest values.
 
 
-2026-09-07 17:37
-
 First working solution, very naive:
-
 ________________________________________________________
 Executed in  224.66 secs    fish           external
    usr time  219.35 secs    0.37 millis  219.35 secs
    sys time    4.74 secs    1.90 millis    4.74 secs
+
+
+
+Replaced the BTreeMap with a regular HashMap plus sorting by keys at the end:
+________________________________________________________
+Executed in  129.32 secs    fish           external
+   usr time  125.01 secs    0.41 millis  125.01 secs
+   sys time    3.59 secs    1.93 millis    3.59 secs
+
+
+Timing where we just load each row into the buffer string and clear once we're done as a  baseline:
+________________________________________________________
+Executed in   32.09 secs    fish           external
+   usr time   29.39 secs    0.19 millis   29.39 secs
+   sys time    2.09 secs    1.53 millis    2.09 secs
+
+So the overhead of
+- splitting a line into key and value
+- parsing the value
+- inserting or updating the corresponding entry in the hash map
+- sorting keys and preparing the output string
+must be about 100 seconds / 1 billion rows = 100 nanoseconds.
+
+
+With the key value split:
+________________________________________________________
+Executed in   47.91 secs    fish           external
+   usr time   45.37 secs    0.40 millis   45.37 secs
+   sys time    2.17 secs    1.78 millis    2.17 secs
+
+So about 17 nanos just to split the string.
+
+With the parsing logic:
+________________________________________________________
+Executed in  110.16 secs    fish           external
+   usr time  106.11 secs    0.44 millis  106.11 secs
+   sys time    3.46 secs    1.93 millis    3.46 secs
+
+Expensive as expected. It's about 63 nanos.
+
+With the hash map insert:
+________________________________________________________
+Executed in  132.41 secs    fish           external
+   usr time  127.62 secs    0.17 millis  127.61 secs
+   sys time    4.08 secs    1.46 millis    4.08 secs
+
+Adds about 22 nanos.
+This seems to suggest preparing the output is very fast which is not impossible, trying it again:
+________________________________________________________
+Executed in  131.23 secs    fish           external
+   usr time  126.22 secs    0.30 millis  126.22 secs
+   sys time    4.27 secs    1.83 millis    4.27 secs
+
+Yep looks like it adds almost no overhead.
+
+I will start by figuring out how to make the initial split less expensive, will try to get down from 17 nanos.
+
+
