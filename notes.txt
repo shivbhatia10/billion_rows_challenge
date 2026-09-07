@@ -1,0 +1,20 @@
+2026-09-07 15:45
+
+Starting now, the measurements.txt file is generated. Looks to be about 15GB which is roughly correct.
+
+Rows look like this:
+
+Wörgl;47.4
+Maravatío de Ocampo;31.6
+Ugargol;9.9
+Depok;0.6
+Guaratinguetá;-46.7
+Jinotega;-6.6
+Coari;5.7
+West Carrollton;26.5
+Biandanshan;36.8
+Lipki;43.2
+
+The task is to read each line and for each weather station calculate the lowest, mean, and highest values.
+
+
