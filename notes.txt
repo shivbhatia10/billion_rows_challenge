@@ -80,3 +80,21 @@ Yep looks like it adds almost no overhead.
 I will start by figuring out how to make the initial split less expensive, will try to get down from 17 nanos.
 
 
+
+I replaced all the parsing logic with some pointer arithmetic that figures out where the semicolon and decimal point are by deduction based on the the fact that there are only 4 cases:
+9.9
+-9.9
+99.9
+-99.9
+
+So the ; is always at either n-4, n-5, or n-6. And then you check the first byte to see if it's a minus sign and handle the remaining digits for either the length 3 or length 4 cases.
+
+This is way faster the whole thing is now:
+
+________________________________________________________
+Executed in   40.42 secs    fish           external
+   usr time   37.42 secs    0.19 millis   37.42 secs
+   sys time    2.36 secs    1.44 millis    2.36 secs
+
+
+

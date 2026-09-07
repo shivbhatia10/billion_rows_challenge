@@ -10,18 +10,42 @@ const FILE_NAME: &'static str = "measurements.txt";
 pub fn main() -> Result<(), io::Error> {
     let file = File::open(FILE_NAME)?;
     let mut buf_reader = BufReader::with_capacity(1 << 20, file);
-    let mut buffer = String::new();
+    let mut line: Vec<u8> = Vec::new();
 
     // (min, total, max, count)
-    let mut accs: HashMap<String, (i16, i64, i16, u32)> = HashMap::new();
+    let mut accs: HashMap<Vec<u8>, (i16, i64, i16, u32)> = HashMap::new();
 
     for _ in 0..1_000_000_000 {
-        buffer.clear();
-        buf_reader.read_line(&mut buffer)?;
-        let Some((key, value)) = buffer.split_once(";") else {
-            continue;
+        line.clear();
+        let mut n = buf_reader.read_until(b'\n', &mut line)?;
+        if n == 0 {
+            break;
+        }
+        if line[n - 1] == b'\n' {
+            n -= 1;
+        }
+        let sc = if line[n - 4] == b';' {
+            n - 4
+        } else if line[n - 5] == b';' {
+            n - 5
+        } else {
+            n - 6
         };
-        let value = parse_val(value)?;
+        let (key, value) = (&line[..sc], &line[sc + 1..]);
+
+        let (neg, value) = if value[0] == b'-' {
+            (true, &value[1..])
+        } else {
+            (false, value)
+        };
+        let value = if value.len() == 3 {
+            (value[0] - b'0') as i16 * 10 + (value[2] - b'0') as i16
+        } else {
+            (value[0] - b'0') as i16 * 100
+                + (value[1] - b'0') as i16 * 10
+                + (value[3] - b'0') as i16
+        };
+        let value = if neg { -value } else { value };
 
         match accs.get_mut(key) {
             Some(e) => {
@@ -31,7 +55,7 @@ pub fn main() -> Result<(), io::Error> {
                 e.3 += 1;
             }
             None => {
-                accs.insert(key.to_string(), (value, value as i64, value, 1));
+                accs.insert(key.to_vec(), (value, value as i64, value, 1));
             }
         }
     }
@@ -47,7 +71,8 @@ pub fn main() -> Result<(), io::Error> {
         let mean = *total as f64 / *count as f64 / 10.0;
         write!(
             out,
-            "{name}={:.1}/{mean:.1}/{:.1}",
+            "{}={:.1}/{mean:.1}/{:.1}",
+            String::from_utf8_lossy(name),
             *min as f64 / 10.0,
             *max as f64 / 10.0
         )
@@ -59,21 +84,3 @@ pub fn main() -> Result<(), io::Error> {
     Ok(())
 }
 
-fn parse_val(val: &str) -> Result<i16, io::Error> {
-    let s = val.trim_end();
-    let (neg, s) = match s.strip_prefix('-') {
-        Some(rest) => (true, rest),
-        None => (false, s),
-    };
-    let (whole, frac) = s
-        .split_once('.')
-        .ok_or(io::Error::other("Could not split {s}"))?;
-    let v = whole
-        .parse::<i16>()
-        .map_err(|e| io::Error::other(format!("Could not parse whole {e:?}")))?
-        * 10
-        + frac
-            .parse::<i16>()
-            .map_err(|e| io::Error::other(format!("Could not parse frac {e:?}")))?;
-    if neg { Ok(-v) } else { Ok(v) }
-}
