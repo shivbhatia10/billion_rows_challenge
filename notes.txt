@@ -99,4 +99,4 @@ Executed in   40.42 secs    fish           external
 
 With the cargo flag stuff it got down to 37.49 secs, with a custom hash function it's at 36.55 secs which could be noise.
 
-
+Reducing branches by using some bitmasks etc gets down to 32.77 secs

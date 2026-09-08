@@ -49,35 +49,39 @@ pub fn main() -> Result<(), io::Error> {
 
     for _ in 0..1_000_000_000 {
         line.clear();
-        let mut n = buf_reader.read_until(b'\n', &mut line)?;
-        if n == 0 {
-            break;
-        }
-        if line[n - 1] == b'\n' {
-            n -= 1;
-        }
-        let sc = if line[n - 4] == b';' {
-            n - 4
-        } else if line[n - 5] == b';' {
-            n - 5
-        } else {
-            n - 6
-        };
-        let (key, value) = (&line[..sc], &line[sc + 1..]);
+        let n = buf_reader.read_until(b'\n', &mut line)?;
+        let (split_point, value) = parse(&line, n);
+        let key = &line[..split_point];
 
-        let (neg, value) = if value[0] == b'-' {
-            (true, &value[1..])
-        } else {
-            (false, value)
-        };
-        let value = if value.len() == 3 {
-            (value[0] - b'0') as i16 * 10 + (value[2] - b'0') as i16
-        } else {
-            (value[0] - b'0') as i16 * 100
-                + (value[1] - b'0') as i16 * 10
-                + (value[3] - b'0') as i16
-        };
-        let value = if neg { -value } else { value };
+
+        // if n == 0 {
+        //     break;
+        // }
+        // if line[n - 1] == b'\n' {
+        //     n -= 1;
+        // }
+        // let sc = if line[n - 4] == b';' {
+        //     n - 4
+        // } else if line[n - 5] == b';' {
+        //     n - 5
+        // } else {
+        //     n - 6
+        // };
+        // let (key, value) = (&line[..sc], &line[sc + 1..]);
+        //
+        // let (neg, value) = if value[0] == b'-' {
+        //     (true, &value[1..])
+        // } else {
+        //     (false, value)
+        // };
+        // let value = if value.len() == 3 {
+        //     (value[0] - b'0') as i16 * 10 + (value[2] - b'0') as i16
+        // } else {
+        //     (value[0] - b'0') as i16 * 100
+        //         + (value[1] - b'0') as i16 * 10
+        //         + (value[3] - b'0') as i16
+        // };
+        // let value = if neg { -value } else { value };
 
         match accs.get_mut(key) {
             Some(e) => {
@@ -114,4 +118,16 @@ pub fn main() -> Result<(), io::Error> {
     print!("{out}");
 
     Ok(())
+}
+
+fn parse(line: &[u8], n: usize) -> (usize, i16) {
+    let tenths = (line[n - 1] - b'0') as i16;
+    let ones = (line[n - 3] - b'0') as i16;
+    let c4 = line[n - 4];
+    let has_tens = ((c4 >= b'0') & (c4 <= b'9')) as i16;
+    let tens = (c4 as i16 - b'0' as i16) * has_tens;
+    let p = n - 4 - has_tens as usize;
+    let neg = (line[p] == b'-') as i16;
+    let mag = tens * 100 + ones * 10 + tenths;
+    (p - neg as usize, (mag ^ -neg) + neg)
 }
