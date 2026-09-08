@@ -1,13 +1,46 @@
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::fmt::Write;
+use std::fs::File;
 use std::hash::{BuildHasherDefault, Hasher};
-use std::{
-    fs::File,
-    io::{self, BufRead, BufReader},
-};
+use std::io;
+use std::os::unix::io::AsRawFd;
 
 const FILE_NAME: &'static str = "measurements.txt";
 const K: u64 = 0x517c_c1b7_2722_0a95;
+
+const PROT_READ: i32 = 1;
+const MAP_PRIVATE: i32 = 2;
+
+unsafe extern "C" {
+    unsafe fn mmap(
+        addr: *mut c_void,
+        len: usize,
+        prot: i32,
+        flags: i32,
+        fd: i32,
+        offset: i64,
+    ) -> *mut c_void;
+}
+
+fn map_file(path: &str) -> io::Result<&'static [u8]> {
+    let file = File::open(path)?;
+    let len = file.metadata()?.len() as usize;
+    let ptr = unsafe {
+        mmap(
+            std::ptr::null_mut(),
+            len,
+            PROT_READ,
+            MAP_PRIVATE,
+            file.as_raw_fd(),
+            0,
+        )
+    };
+    if ptr as isize == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(unsafe { std::slice::from_raw_parts(ptr as *const u8, len) })
+}
 
 #[derive(Default)]
 struct CustomHasher(u64);
@@ -40,58 +73,46 @@ impl Hasher for CustomHasher {
 type CustomHashMap<K, V> = HashMap<K, V, BuildHasherDefault<CustomHasher>>;
 
 pub fn main() -> Result<(), io::Error> {
-    let file = File::open(FILE_NAME)?;
-    let mut buf_reader = BufReader::with_capacity(1 << 20, file);
-    let mut line: Vec<u8> = Vec::new();
+    let data = map_file(FILE_NAME)?;
+
+    // let mut buf_reader = BufReader::with_capacity(1 << 20, file);
+    // let mut line: Vec<u8> = Vec::new();
 
     // (min, total, max, count)
-    let mut accs: CustomHashMap<Vec<u8>, (i16, i64, i16, u32)> = CustomHashMap::default();
+    let mut accs: CustomHashMap<&'static [u8], (i16, i64, i16, u32)> = CustomHashMap::default();
 
-    for _ in 0..1_000_000_000 {
-        line.clear();
-        let n = buf_reader.read_until(b'\n', &mut line)?;
-        let (split_point, value) = parse(&line, n);
-        let key = &line[..split_point];
+    let mut pos = 0usize;
+    while pos < data.len() {
+        let mut sc = pos;
+        while data[sc] != b';' {
+            sc += 1;
+        }
+        let name = &data[pos..sc];
 
+        let vs = sc + 1;
+        let neg = (data[vs] == b'-') as usize;
+        let d0 = vs + neg;
+        let two = (data[d0 + 1] != b'.') as usize;
+        let mag = if two == 1 {
+            (data[d0] - b'0') as i32 * 100
+                + (data[d0 + 1] - b'0') as i32 * 10
+                + (data[d0 + 3] - b'0') as i32
+        } else {
+            (data[d0] - b'0') as i32 * 10 + (data[d0 + 2] - b'0') as i32
+        };
+        let n = neg as i32;
+        let v = ((mag ^ -n) + n) as i16;
+        pos = d0 + two + 4;
 
-        // if n == 0 {
-        //     break;
-        // }
-        // if line[n - 1] == b'\n' {
-        //     n -= 1;
-        // }
-        // let sc = if line[n - 4] == b';' {
-        //     n - 4
-        // } else if line[n - 5] == b';' {
-        //     n - 5
-        // } else {
-        //     n - 6
-        // };
-        // let (key, value) = (&line[..sc], &line[sc + 1..]);
-        //
-        // let (neg, value) = if value[0] == b'-' {
-        //     (true, &value[1..])
-        // } else {
-        //     (false, value)
-        // };
-        // let value = if value.len() == 3 {
-        //     (value[0] - b'0') as i16 * 10 + (value[2] - b'0') as i16
-        // } else {
-        //     (value[0] - b'0') as i16 * 100
-        //         + (value[1] - b'0') as i16 * 10
-        //         + (value[3] - b'0') as i16
-        // };
-        // let value = if neg { -value } else { value };
-
-        match accs.get_mut(key) {
+        match accs.get_mut(name) {
             Some(e) => {
-                e.0 = e.0.min(value);
-                e.1 += value as i64;
-                e.2 = e.2.max(value);
+                e.0 = e.0.min(v);
+                e.1 += v as i64;
+                e.2 = e.2.max(v);
                 e.3 += 1;
             }
             None => {
-                accs.insert(key.to_vec(), (value, value as i64, value, 1));
+                accs.insert(name, (v, v as i64, v, 1));
             }
         }
     }
@@ -118,16 +139,4 @@ pub fn main() -> Result<(), io::Error> {
     print!("{out}");
 
     Ok(())
-}
-
-fn parse(line: &[u8], n: usize) -> (usize, i16) {
-    let tenths = (line[n - 1] - b'0') as i16;
-    let ones = (line[n - 3] - b'0') as i16;
-    let c4 = line[n - 4];
-    let has_tens = ((c4 >= b'0') & (c4 <= b'9')) as i16;
-    let tens = (c4 as i16 - b'0' as i16) * has_tens;
-    let p = n - 4 - has_tens as usize;
-    let neg = (line[p] == b'-') as i16;
-    let mag = tens * 100 + ones * 10 + tenths;
-    (p - neg as usize, (mag ^ -neg) + neg)
 }

@@ -99,4 +99,15 @@ Executed in   40.42 secs    fish           external
 
 With the cargo flag stuff it got down to 37.49 secs, with a custom hash function it's at 36.55 secs which could be noise.
 
-Reducing branches by using some bitmasks etc gets down to 32.77 secs
+Reducing branches by using some bitmasks etc gets down to 32.77 secs.
+
+
+With mmap it goes up:
+________________________________________________________
+Executed in   45.91 secs    fish           external
+   usr time   22.70 secs    0.37 millis   22.70 secs
+   sys time    6.73 secs    1.70 millis    6.73 secs
+
+But it looks like it's because the process stalls on IO, actual usr time went down a lot.
+
+
