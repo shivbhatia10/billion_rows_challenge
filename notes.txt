@@ -119,5 +119,5 @@ Executed in    3.26 secs    fish           external
 Need to warm up the cache though, I have 32GB RAM on my machine and the dataset is about 15.5GB so it fits comfortably. 
 The only tricky bit is how to handle splitting lines between threads. If you start in the middle of a sentence you should increment until the byte before your starting position is not \n. That ensures each line is handled exactly once without the threads needing to coordinate. Merging the hash maps is pretty trivial
 
-Now I probably need a profiler, I suspect the only place left for a bit of work is the hash map maybe, could use open addressing or something like that.
+Now I probably need a profiler, I think the only idea I have left is the hash map maybe
 
