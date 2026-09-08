@@ -1,17 +1,3 @@
-// 1BRC measurements generator. No crates, no JDK.
-//   rustc -O gen.rs -o gen
-//   ./gen 1000000000 measurements.txt weather_stations.csv
-// Station list (805 KB, no JDK needed):
-//   curl -O https://raw.githubusercontent.com/gunnarmorling/1brc/main/data/weather_stations.csv
-//
-// Note: column 2 of that file is really a latitude, but the official generator
-// treats it as a mean temperature too, so we do the same. Output for 1B rows is
-// ~15.5 GB (a bit fatter than the official ~13 GB, since these city names are
-// longer than the 413 names the original Java generator uses).
-//
-// Verified here: 10,000 unique stations, multi-byte UTF-8 names, every line
-// matches ^[^;]+;-?[0-9]{1,2}\.[0-9]$, ~1.3 s per 10M rows per core.
-
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
 use std::sync::mpsc::sync_channel;
@@ -19,7 +5,6 @@ use std::sync::mpsc::sync_channel;
 const N_STATIONS: usize = 10_000;
 const CHUNK_ROWS: usize = 500_000;
 
-// xorshift64* — small, fast, plenty good for fake weather.
 struct Rng(u64);
 impl Rng {
     fn next_u64(&mut self) -> u64 {
@@ -64,7 +49,6 @@ fn load_stations(path: &str) -> Vec<(Vec<u8>, f64)> {
     }
     assert!(all.len() >= N_STATIONS, "only {} usable stations", all.len());
 
-    // Fisher-Yates, fixed seed so the same list comes out every run.
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     for i in (1..all.len()).rev() {
         let j = (rng.next_u64() % (i as u64 + 1)) as usize;
@@ -74,7 +58,6 @@ fn load_stations(path: &str) -> Vec<(Vec<u8>, f64)> {
     all
 }
 
-// Append e.g. -12.3 given tenths = -123.
 fn push_temp(buf: &mut Vec<u8>, tenths: i32) {
     let (neg, t) = (tenths < 0, tenths.unsigned_abs());
     if neg {
@@ -108,7 +91,6 @@ fn main() {
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     let chunks = (rows + CHUNK_ROWS as u64 - 1) / CHUNK_ROWS as u64;
 
-    // Bounded queue: producers block when the writer falls behind, so RAM stays flat.
     let (tx, rx) = sync_channel::<Vec<u8>>(threads * 2);
     let stations = &stations;
 
