@@ -12,6 +12,12 @@ const K: u64 = 0x517c_c1b7_2722_0a95;
 const PROT_READ: i32 = 1;
 const MAP_PRIVATE: i32 = 2;
 
+const MADV_SEQUENTIAL: i32 = 2;
+
+unsafe extern "C" {
+    unsafe fn madvise(addr: *mut c_void, len: usize, advice: i32) -> i32;
+}
+
 unsafe extern "C" {
     unsafe fn mmap(
         addr: *mut c_void,
@@ -38,6 +44,9 @@ fn map_file(path: &str) -> io::Result<&'static [u8]> {
     };
     if ptr as isize == -1 {
         return Err(io::Error::last_os_error());
+    }
+    unsafe {
+        madvise(ptr, len, MADV_SEQUENTIAL);
     }
     Ok(unsafe { std::slice::from_raw_parts(ptr as *const u8, len) })
 }
@@ -74,9 +83,6 @@ type CustomHashMap<K, V> = HashMap<K, V, BuildHasherDefault<CustomHasher>>;
 
 pub fn main() -> Result<(), io::Error> {
     let data = map_file(FILE_NAME)?;
-
-    // let mut buf_reader = BufReader::with_capacity(1 << 20, file);
-    // let mut line: Vec<u8> = Vec::new();
 
     // (min, total, max, count)
     let mut accs: CustomHashMap<&'static [u8], (i16, i64, i16, u32)> = CustomHashMap::default();
