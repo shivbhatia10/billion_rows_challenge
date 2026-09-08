@@ -5,6 +5,7 @@ use std::fs::File;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::io;
 use std::os::unix::io::AsRawFd;
+use std::thread::ScopedJoinHandle;
 
 const FILE_NAME: &'static str = "measurements.txt";
 const K: u64 = 0x517c_c1b7_2722_0a95;
@@ -81,44 +82,90 @@ impl Hasher for CustomHasher {
 
 type CustomHashMap<K, V> = HashMap<K, V, BuildHasherDefault<CustomHasher>>;
 
+// (min, total, max, count)
+type Acc = (i16, i64, i16, u32);
+
 pub fn main() -> Result<(), io::Error> {
     let data = map_file(FILE_NAME)?;
 
-    // (min, total, max, count)
-    let mut accs: CustomHashMap<&'static [u8], (i16, i64, i16, u32)> = CustomHashMap::default();
+    let len = data.len();
 
-    let mut pos = 0usize;
-    while pos < data.len() {
-        let mut sc = pos;
-        while data[sc] != b';' {
-            sc += 1;
+    const T: usize = 8;
+
+    let maps: Vec<_> = std::thread::scope(|s| {
+        let mut handles: Vec<ScopedJoinHandle<CustomHashMap<&'static [u8], Acc>>> = Vec::new();
+
+        for t in 0..T {
+            let handle = s.spawn(move || {
+                let mut accs: CustomHashMap<&'static [u8], Acc> = CustomHashMap::default();
+
+                let mut pos = len * t / T;
+                if pos > 0 {
+                    while data[pos] != b'\n' {
+                        pos += 1;
+                    }
+                    pos += 1;
+                }
+
+                while pos < len * (t + 1) / T {
+                    let mut sc = pos;
+                    while data[sc] != b';' {
+                        sc += 1;
+                    }
+                    let name = &data[pos..sc];
+
+                    let vs = sc + 1;
+                    let neg = (data[vs] == b'-') as usize;
+                    let d0 = vs + neg;
+                    let two = (data[d0 + 1] != b'.') as usize;
+                    let mag = if two == 1 {
+                        (data[d0] - b'0') as i32 * 100
+                            + (data[d0 + 1] - b'0') as i32 * 10
+                            + (data[d0 + 3] - b'0') as i32
+                    } else {
+                        (data[d0] - b'0') as i32 * 10 + (data[d0 + 2] - b'0') as i32
+                    };
+                    let n = neg as i32;
+                    let v = ((mag ^ -n) + n) as i16;
+                    pos = d0 + two + 4;
+
+                    match accs.get_mut(name) {
+                        Some(e) => {
+                            e.0 = e.0.min(v);
+                            e.1 += v as i64;
+                            e.2 = e.2.max(v);
+                            e.3 += 1;
+                        }
+                        None => {
+                            accs.insert(name, (v, v as i64, v, 1));
+                        }
+                    }
+                }
+                accs
+            });
+            handles.push(handle);
         }
-        let name = &data[pos..sc];
 
-        let vs = sc + 1;
-        let neg = (data[vs] == b'-') as usize;
-        let d0 = vs + neg;
-        let two = (data[d0 + 1] != b'.') as usize;
-        let mag = if two == 1 {
-            (data[d0] - b'0') as i32 * 100
-                + (data[d0 + 1] - b'0') as i32 * 10
-                + (data[d0 + 3] - b'0') as i32
-        } else {
-            (data[d0] - b'0') as i32 * 10 + (data[d0 + 2] - b'0') as i32
-        };
-        let n = neg as i32;
-        let v = ((mag ^ -n) + n) as i16;
-        pos = d0 + two + 4;
+        let mut out: Vec<CustomHashMap<&'static [u8], Acc>> = Vec::new();
+        for h in handles {
+            out.push(h.join().unwrap());
+        }
+        out
+    });
 
-        match accs.get_mut(name) {
-            Some(e) => {
-                e.0 = e.0.min(v);
-                e.1 += v as i64;
-                e.2 = e.2.max(v);
-                e.3 += 1;
-            }
-            None => {
-                accs.insert(name, (v, v as i64, v, 1));
+    let mut accs: CustomHashMap<&'static [u8], Acc> = CustomHashMap::default();
+    for m in maps {
+        for (k, v) in m {
+            match accs.get_mut(k) {
+                Some(e) => {
+                    e.0 = e.0.min(v.0);
+                    e.1 += v.1;
+                    e.2 = e.2.max(v.2);
+                    e.3 += v.3;
+                }
+                None => {
+                    accs.insert(k, v);
+                }
             }
         }
     }
