@@ -111,3 +111,12 @@ Executed in   45.91 secs    fish           external
 But it looks like it's because the process stalls on IO, actual usr time went down a lot.
 
 
+Added very simple 8 core threading and with reruns it's now super fast:
+________________________________________________________
+Executed in    3.26 secs    fish           external
+   usr time   22.75 secs    0.41 millis   22.75 secs
+   sys time    1.35 secs    1.73 millis    1.34 secs
+Need to warm up the cache though, I have 32GB RAM on my machine and the dataset is about 15.5GB so it fits comfortably. 
+The only tricky bit is how to handle splitting lines between threads. If you start in the middle of a sentence you should increment until the byte before your starting position is not \n. That ensures each line is handled exactly once without the threads needing to coordinate. Merging the hash maps is pretty trivial
+
+Now I probably need a profiler, I suspect the only place left for a bit of work is the hash map maybe, could use open addressing or something like that.
