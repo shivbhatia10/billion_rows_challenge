@@ -101,10 +101,9 @@ pub fn main() -> Result<(), io::Error> {
 
                 let mut pos = len * t / T;
                 if pos > 0 {
-                    while data[pos] != b'\n' {
+                    while data[pos - 1] != b'\n' {
                         pos += 1;
                     }
-                    pos += 1;
                 }
 
                 while pos < len * (t + 1) / T {
